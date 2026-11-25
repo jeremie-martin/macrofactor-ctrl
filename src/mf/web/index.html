@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>mf</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23171717'/><path d='M8 22V11l8 8 8-8v11' fill='none' stroke='%23fafafa' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <section class="left" aria-label="Add food">
+    <div class="composer" id="composer">
+      <div class="slot"><input id="food" placeholder="Food" autocomplete="off" spellcheck="false" aria-label="Food"></div>
+      <div class="slot"><input id="amt" placeholder="Amount" autocomplete="off" inputmode="decimal" aria-label="Amount"></div>
+      <div class="unit" id="unit"></div>
+      <div class="slot when" id="whenbox"><input id="when" autocomplete="off" aria-label="Time"><button id="nowbtn" tabindex="-1" title="Log at the present time again (Esc)">× now</button></div>
+      <button id="log" class="off">Log <span>↵</span></button>
+    </div>
+    <div class="strip" id="strip"></div>
+    <div class="listhead">
+      <button class="tab on" data-tab="now" title="What you usually log around this hour, then what you logged last">Now</button>
+      <button class="tab" data-tab="usual" title="Your most used foods, in alphabetical order">Index</button>
+      <button class="tb tog" id="only" aria-pressed="false" title="The same two views, of your recipes only">Recipes only</button>
+      <span class="count" id="count"></span>
+      <button class="tb" id="newrec">New recipe</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+  <section class="right" aria-label="Day">
+    <div class="dayhead" id="dayhead"></div>
+    <input id="datepick" type="date" tabindex="-1" aria-hidden="true">
+    <div class="dayfix">
+      <div class="cols"><span></span><span id="timecol">Time</span><span></span><span class="q">Amount</span><span></span><span class="k">kcal</span><button class="lg" tabindex="-1"><span class="p">P</span><span class="f">F</span><span class="c">C</span></button><span></span></div>
+      <div id="sums"></div>
+      <div class="rule"></div>
+    </div>
+    <div class="ledger" id="ledger" tabindex="-1"></div>
+  </section>
+  <footer class="phone" id="phone"></footer>
+</div>
+<div id="syncmenu" popover>
+  <button data-sync="day"><b>This day</b><span>Read from the phone's screen: what you changed on the phone itself. About 15 s.</span></button>
+  <button data-sync="recipes"><b>Recipes</b><span>Read the phone's recipe list: recipes made or changed there. About 15 s.</span></button>
+  <button data-sync="week"><b>Last 7 days</b><span id="exports"></span></button>
+</div>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

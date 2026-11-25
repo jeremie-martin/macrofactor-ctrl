@@ -1,0 +1,304 @@
+/* mf — one line to add a food, the list of what you are likely to want, and the day.
+
+   Held to these rules:
+   - Regions and slots have fixed sizes. Anything that changes lives in a slot of its own: text may change
+     inside it, the controls around it stay where they are. Hover changes ink only.
+   - Rows enter or leave a list only at the instant of your own action. The phone finishing a job changes
+     ink, never geometry. A control that lands under a resting pointer does nothing until the pointer moves.
+   - Colour means something: blue is where Enter acts now, orange is "not now / not today", red is wrong.
+     Protein, fat and carbs have MacroFactor's own three colours, as the segments of a row's bar and as the square
+     before their letter or figure; never as text. Grey text is information; faint is decoration only.
+   - A row is the same thing in the list and in the day: name, amount (a number, then what it counts), kcal,
+     protein, fat and carbs, and its +. Protein, fat and carbs are a bar of where the energy comes from, or, after
+     a click on their column heads, three figures under those heads; the columns are the same on both sides.
+   - Two weights, regular and bold: they are the ones every system font has. One row height everywhere.
+   - One kind of text button (.tb): same shape, hover, pressed state and focus ring wherever it appears.
+   - One + wherever a row can be logged as it is shown (the list, the day): blue, at the row's right end. */
+
+:root {
+  --bg: #fafaf8; --ink: #1a1a18; --mut: #66665f; --faint: #8c8c85; --line: #e6e6e0; --line2: #cfcfc8;
+  --acc: #2957c8; --accsoft: #e6edfb; --hover: #f0f0eb; --press: #e3e3dc; --field: #fff;
+  --warn: #a84e0c; --warnsoft: #fbeedd; --err: #bf3329; --errsoft: #fbe9e6; --ok: #2a7a4a;
+  --mp: #ff8660; --mf: #ffc447; --mc: #4cb179; /* MacroFactor's: protein, fat, carbs */
+  --row: 24px; --name: 14px; --edge: 12px;
+  /* named faces first: "system-ui" is whatever the desktop says, and that is not always a face made for interfaces */
+  --font: "Inter", "Adwaita Sans", "Cantarell", "Noto Sans", "DejaVu Sans", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131312; --ink: #eaeae5; --mut: #a3a39c; --faint: #7c7c75; --line: #2a2a27; --line2: #3d3d39;
+    --acc: #8eaeff; --accsoft: #1d2842; --hover: #20201e; --press: #2c2c29; --field: #1a1a18;
+    --warn: #f0a560; --warnsoft: #35260f; --err: #ff8175; --errsoft: #3a1a17; --ok: #72cf98;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 13px/1.2 var(--font); font-variant-numeric: tabular-nums; overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+input { background: none; border: 0; outline: 0; padding: 0; min-width: 0; }
+b { font-weight: 700; }
+kbd { font: inherit; font-size: 11px; border: 1px solid var(--line2); border-radius: 4px; padding: 0 4px; color: var(--mut); }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+input:focus-visible, select:focus-visible, .ledger:focus-visible { outline: 0; }
+
+/* the one text button */
+.tb { height: 22px; padding: 0 7px; border-radius: 4px; color: var(--ink); font-size: 12px; white-space: nowrap; flex: none; }
+.tb:hover { background: var(--hover); }
+.tb:active { background: var(--press); }
+.tb[disabled] { visibility: hidden; }
+.tb.box { height: 28px; padding: 0 11px; border: 1px solid var(--line2); border-radius: 6px; color: var(--mut); }
+.tb.box:hover { color: var(--ink); }
+.tb.pri { color: var(--ink); border-color: var(--ink); font-weight: 700; } /* the main action here, but not what Enter does: not blue */
+.tb.danger { color: var(--err); }
+.tb.danger:hover { background: var(--err); color: var(--bg); }
+
+.app { height: 100vh; max-width: 2000px; margin: 0 auto; padding: 20px 24px 0; display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(600px, 36vw, 720px); grid-template-rows: minmax(0, 1fr) 40px; column-gap: 32px; }
+.left, .right { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+
+/* ---- composer: one line, five fixed slots ---- */
+.composer { height: 44px; flex: none; display: grid; grid-template-columns: minmax(0, 1fr) 72px 118px 132px 124px;
+  background: var(--field); border: 1px solid var(--line2); border-radius: 8px; font-size: 15px; }
+.composer:focus-within { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+.composer > * { height: 42px; border-left: 1px solid var(--line); display: flex; align-items: center; min-width: 0; }
+.composer > *:first-child { border-left: 0; }
+.slot input { width: 100%; height: 100%; padding: 0 var(--edge); text-overflow: ellipsis; }
+.slot input::placeholder { color: var(--mut); }
+#food { padding-left: calc(var(--edge) - 1px); } /* the border is the first pixel of the shared left edge */
+#amt { text-align: right; padding: 0 6px 0 4px; font-weight: 700; }
+#amt::placeholder { font-weight: 400; font-size: 13px; }
+.composer.badamt .slot:has(#amt), .composer.badamt .unit { background: var(--errsoft); }
+.unit { padding: 3px 8px 0 0; border-left: 0 !important; color: var(--mut); font-size: 13px; white-space: nowrap; }
+.unit:focus-within { background: var(--accsoft); }
+.unit span { overflow: hidden; text-overflow: ellipsis; }
+.unit select { appearance: none; border: 0; outline: 0; background: none; color: var(--ink); cursor: pointer; width: 100%; height: 100%;
+  padding: 0 14px 0 0; text-overflow: ellipsis; background: linear-gradient(45deg, transparent 50%, var(--mut) 50%) right 5px center / 4px 4px no-repeat, linear-gradient(-45deg, transparent 50%, var(--mut) 50%) right 1px center / 4px 4px no-repeat; }
+.unit option { background: var(--field); color: var(--ink); }
+.when { position: relative; font-size: 14px; }
+.when input::placeholder { font-size: 13px; }
+.when.set { background: var(--warnsoft); }
+.when.set input { color: var(--warn); font-weight: 700; padding-right: 50px; }
+#nowbtn { position: absolute; right: 6px; height: 22px; padding: 0 6px; border-radius: 4px; font-size: 11px; color: var(--warn); display: none; }
+#nowbtn:hover { background: var(--bg); }
+.when.set #nowbtn { display: block; }
+.when.bad { background: var(--errsoft); }
+.when.bad input { color: var(--err); }
+#log { justify-content: center; gap: 6px; font-weight: 700; color: var(--acc); border-radius: 0 7px 7px 0; font-size: 13px; white-space: nowrap; }
+#log:hover { background: var(--accsoft); }
+#log:active { background: var(--press); }
+#log.other { color: var(--warn); }
+#log.other:hover { background: var(--warnsoft); }
+#log.off { color: var(--mut); font-weight: 400; cursor: default; background: none; } /* Enter would do nothing */
+#log span { font-weight: 400; opacity: .7; }
+
+.strip { height: 30px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 var(--edge); color: var(--mut); font-size: 12px; white-space: nowrap; overflow: hidden; }
+.strip b { color: var(--ink); flex: none; }
+.strip .rest b { font-weight: 700; }
+.strip .sep { color: var(--faint); flex: none; }
+.strip .bad { color: var(--err); overflow: hidden; text-overflow: ellipsis; }
+.strip .nm { overflow: hidden; text-overflow: ellipsis; min-width: 40px; flex: 0 1 auto; }
+.strip .rest { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1000000 auto; } /* gives way long before the food's name does */
+.strip .fix { flex: none; }
+.strip .at { flex: none; color: var(--warn); }
+.strip .p::before, .strip .f::before, .strip .c::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; background: var(--mp); }
+.strip .f::before { background: var(--mf); } .strip .c::before { background: var(--mc); }
+
+.listhead { height: 30px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 5px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--mut); white-space: nowrap; }
+.tab { height: 30px; padding: 0 7px; box-shadow: none; color: var(--mut); border-radius: 4px 4px 0 0; }
+.tab.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); } /* same weight on and off: switching moves nothing */
+.listhead .count { margin-left: auto; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; }
+.listhead .tb.on { color: var(--warn); }
+.listhead .tog { margin-left: 10px; color: var(--mut); }
+.listhead .tog::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border: 1px solid var(--line2); border-radius: 2px; vertical-align: -1px; }
+.listhead .tog.on { color: var(--ink); }
+.listhead .tog.on::before { background: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--bg); }
+
+/* ---- the food index: columns of fixed rows, never scrolls ---- */
+.grid { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; column-gap: 20px; align-content: start; overflow: hidden; }
+/* margin (a letter, in the index) · name · the amount's number · what it counts · kcal · protein, fat, carbs · + */
+.food, .fhead { --margin: 28px; display: grid; grid-template-columns: var(--margin) minmax(0, 1fr) 44px 66px 38px 120px 30px; align-items: center; min-width: 0; }
+.grid.tight .food, .grid.tight .fhead { grid-template-columns: var(--margin) minmax(0, 1fr) 44px 66px 38px 30px; }
+.grid.plain .food, .grid.plain .fhead { --margin: 8px; } /* no letters in the margin: names start under the titles */
+.grid.tight .fb, .grid.tight .lg, .grid.tight .fn small { display: none; } /* no room: no bar, and no brand rather than a stub */
+.fhead, .cols { color: var(--mut); font-size: 11px; letter-spacing: .03em; text-transform: uppercase; }
+.fhead { height: 22px; }
+.fhead span { text-align: right; }
+.fhead .ft, .sect { text-align: left; padding-left: var(--edge); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fhead .ft { grid-column: 1 / 5; }
+.sect { height: var(--row); line-height: calc(var(--row) + 6px); color: var(--mut); font-size: 11px; letter-spacing: .03em; text-transform: uppercase; box-shadow: inset 0 1px 0 var(--line); } /* a title inside a column: as the column heads, under a hairline */
+.food { height: var(--row); border-radius: 5px; cursor: pointer; }
+.food:hover { background: var(--hover); }
+.food.first { box-shadow: inset 0 1px 0 var(--line); border-radius: 0; } /* a new letter */
+.food.hi { background: var(--accsoft); box-shadow: inset 2px 0 0 var(--acc); border-radius: 5px; }
+.fl { font-weight: 700; font-size: 12px; color: var(--mut); padding-left: var(--edge); }
+/* the name keeps its room; a brand that would be cut to a stub drops to a second line, out of sight */
+.fn { min-width: 0; padding: 0 6px 0 4px; display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; height: var(--row); line-height: var(--row); overflow: hidden; }
+.fn > span { font-size: var(--name); flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fn small { flex: 0 1 auto; min-width: 7ch; color: var(--mut); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fn u { text-decoration: none; color: var(--acc); font-weight: 700; }
+.rc { flex: none; font-style: normal; font-size: 9px; line-height: 13px; padding: 0 4px; border-radius: 7px; background: var(--line); color: var(--mut); }
+/* an amount: its number, right-aligned so that every row's lines up, then what it counts (g, srv, fl oz); after a
+   weight, how the food was counted, smaller */
+.fw, .row .q { text-align: right; white-space: nowrap; }
+.fc, .row .u { padding-left: 4px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc small, .row .u small { font-size: 12px; margin-left: 7px; }
+/* protein, fat and carbs of a row, the same in the list and in the day: one bar of where its energy comes from, or
+   (a click on the column heads) the three figures under those heads */
+.fb { padding-left: 14px; display: flex; align-items: center; height: var(--row); }
+.fb.figs { padding-left: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+.figs i { font-style: normal; text-align: right; }
+.figs .nil { color: var(--faint); }
+.row.pend .figs i, .row.failed .figs i { color: var(--mut); }
+.bar { flex: 1; display: flex; gap: 1px; height: 5px; border-radius: 2.5px; overflow: hidden; }
+.bar i { flex: 0 0 0; min-width: 0; background: var(--mp); }
+.bar .f { background: var(--mf); } .bar .c { background: var(--mc); }
+.row.pend .bar, .row.failed .bar { opacity: .45; }
+/* the legend over the bars, and the heads of the sums' three columns: a square of the colour, then the letter */
+.lg { position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; height: 20px; border-radius: 4px; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; }
+.lg span { text-align: right; }
+.lg::after { content: ""; position: absolute; inset: 0 -5px 0 8px; border-radius: 4px; z-index: -1; } /* the tint clears the kcal head and the last letter */
+.lg:hover { color: var(--ink); }
+.lg:hover::after { background: var(--hover); }
+.lg:active::after { background: var(--press); }
+.cols .lg { grid-column: span 3; }
+.lg span::before, .cols .m::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; background: var(--mp); }
+.lg .f::before, .cols .m.f::before { background: var(--mf); } .lg .c::before, .cols .m.c::before { background: var(--mc); }
+/* the one +: logs the row as it is shown. Quiet until the row is pointed at or lit, blue (orange: not now, or not today) under the pointer */
+.plus { height: 20px; width: 24px; justify-self: end; border-radius: 4px; font-size: 15px; line-height: 18px; color: var(--faint); }
+.food:hover .plus, .food.hi .plus { color: var(--acc); }
+.food .plus:hover, .row .plus:hover { background: var(--acc); color: var(--bg); }
+.grid.other .food:hover .plus, .grid.other .food.hi .plus { color: var(--warn); }
+.grid.other .food .plus:hover { background: var(--warn); color: var(--bg); }
+.plus:active { opacity: .8; }
+.fk { text-align: right; white-space: nowrap; }
+
+/* ---- day ---- */
+.dayhead { height: 44px; flex: none; display: flex; align-items: center; gap: 6px; white-space: nowrap; padding-right: 8px; } /* ends where the table does */
+.dayhead input.bad { border-bottom-color: var(--err) !important; }
+.nav { width: 28px; padding: 0 !important; font-size: 15px; line-height: 1; }
+.date { font-size: 17px; font-weight: 700; margin-left: 6px; letter-spacing: -.01em; height: 30px; padding: 0 6px; border-radius: 6px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.date:hover { background: var(--hover); }
+.date:active { background: var(--press); }
+.date small { font-size: 13px; font-weight: 400; color: var(--mut); margin-left: 8px; }
+.date.other { color: var(--warn); }
+.dayhead .last { margin-left: auto; }
+#datepick { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+#rdiscard { min-width: 70px; } /* "Sure?" in the place of "Discard": nothing beside it moves */
+.rtitle { font-size: 17px; font-weight: 700; margin-right: 4px; }
+.rname { font-size: 15px; font-weight: 700; border-bottom: 1px solid var(--line2) !important; height: 28px; flex: 1 1 120px; min-width: 80px; }
+.rserv { width: 40px; height: 28px; border-bottom: 1px solid var(--line2) !important; text-align: right; font-weight: 700; }
+.dayhead .lbl { color: var(--mut); font-size: 12px; margin-left: 6px; }
+
+/* header, sums and rows share one grid; the fixed part reserves the same scrollbar gutter as the ledger */
+.dayfix { flex: none; overflow: hidden; scrollbar-gutter: stable; }
+.ledger::-webkit-scrollbar, .dayfix::-webkit-scrollbar { width: 8px; }
+.ledger::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 4px; }
+.ledger::-webkit-scrollbar-button { display: none; }
+@supports not selector(::-webkit-scrollbar) { .ledger, .dayfix { scrollbar-width: thin; scrollbar-color: var(--line2) transparent; } }
+/* state · time · name · weight · count · kcal · P · F · C (the sums' three figures; a row's bar spans them) · actions */
+.row, .cols, .sum { display: grid; grid-template-columns: 14px 44px minmax(0, 1fr) 44px 66px 38px 40px 40px 40px 68px; align-items: center; }
+.cols { height: 30px; }
+.cols span, .sum span, .row > span { white-space: nowrap; }
+.k, .m, .q { text-align: right; }
+#sums { height: 66px; }
+.sum { height: 22px; }
+.sum .n { grid-column: 2 / 5; color: var(--mut); overflow: hidden; text-overflow: ellipsis; }
+.sum.eaten { font-weight: 700; }
+.sum.eaten .n { color: var(--ink); }
+.sum.tgt { color: var(--mut); }
+.sum .n .rest, .sum .n .bad { font-weight: 400; margin-left: 6px; } /* a note beside the name, not part of it */
+.sum .n .rest { color: var(--mut); }
+.sum .bad { color: var(--err); }
+.sum .over { color: var(--err); }
+.rule { height: 9px; border-bottom: 1px solid var(--line2); margin-bottom: 1px; } /* the day's rows then fall on the index's rows */
+
+.ledger { flex: 1; min-height: 0; overflow-y: auto; outline: 0; position: relative; scrollbar-gutter: stable; scroll-snap-type: y mandatory; } /* scrolls by whole rows */
+.row { height: var(--row); border-radius: 4px; position: relative; scroll-snap-align: start; }
+.row.gap::before { content: ""; position: absolute; left: 0; right: 0; top: 0; border-top: 1px solid var(--line); }
+.row:hover { background: var(--hover); }
+.row.cur { background: var(--accsoft); }
+.row .t { color: var(--mut); cursor: text; border-radius: 3px; margin: 0 8px 0 -4px; padding-left: 4px; height: 20px; line-height: 20px; }
+.row .t.rep { color: transparent; }
+.row:hover .t.rep, .row.cur .t.rep { color: var(--mut); }
+/* the name keeps its room; a brand that would be cut to a stub drops to a second line, out of sight */
+.row.saved, .row.pend { cursor: pointer; } /* a click takes the food to the line; its amount and time have the text cursor */
+.row .n { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; padding-right: 10px; min-width: 0; height: var(--row); line-height: var(--row); overflow: hidden; }
+.row .n b { font-size: var(--name); font-weight: 400; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.row .n small { color: var(--mut); font-size: 12px; flex: 0 1 auto; min-width: 7ch; overflow: hidden; text-overflow: ellipsis; }
+.row .n.err { flex-wrap: nowrap; }
+.row .n .bad { color: var(--err); flex: none; }
+.row .q { cursor: text; position: relative; }
+.row .u { cursor: text; }
+.row .u.ed { display: flex; align-items: center; gap: 4px; overflow: visible; }
+.row .u.ed i { font-style: normal; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.row .fb { grid-column: span 3; }
+/* amount and unit are one thing to click: one outline around both */
+.row.saved:not(:has(input)):has(.q:hover, .u:hover) .q::after { content: ""; position: absolute; left: 2px; top: 2px; bottom: 2px; width: 106px; border-radius: 3px; box-shadow: 0 0 0 1px var(--line2); pointer-events: none; }
+.row.saved .t:not(.ed):hover { box-shadow: 0 0 0 1px var(--line2); }
+/* not confirmed yet: everything in the information grey, at full strength; the marker says the rest */
+.row.pend .n b, .row.pend .q b, .row.pend .u b, .row.pend .k, .row.failed .q b, .row.failed .u b, .row.failed .k { color: var(--mut); font-weight: 400; }
+.row.failed .n b { color: var(--err); }
+.row input { width: 100%; height: 20px; background: var(--field); box-shadow: 0 0 0 1.5px var(--field), 0 0 0 3px var(--acc); border-radius: 1px; font-weight: 700; position: relative; z-index: 1; }
+.row input.bad { box-shadow: 0 0 0 1.5px var(--field), 0 0 0 3px var(--err); }
+.row .q input { text-align: right; }
+.row .u input { width: 26px; flex: none; } /* a count: a few figures, beside the weight that stands for it */
+.row .q:has(input) + .u { padding-left: 8px; } /* the field's ring does not touch the unit */
+.row .t input { width: 38px; font-weight: 400; display: block; }
+.row .t:has(input) { margin-right: 4px; }
+/* row actions: two fixed places, so what the phone changes never lands where another control was */
+.a { display: grid; grid-template-columns: 40px 24px; justify-content: end; align-items: center; }
+.a .tb { height: 20px; padding: 0; font-size: 11px; color: var(--mut); }
+.a .tb:hover { color: var(--ink); background: var(--line2); }
+.a .x { grid-column: 2; font-size: 14px; visibility: hidden; }
+.a .plus { grid-column: 1; width: 24px; justify-self: end; font-size: 15px; color: var(--faint); } /* always there, as in the list */
+.a .plus:hover { background: var(--acc); color: var(--bg); }
+.row:hover .plus, .row.cur .plus { color: var(--acc); }
+.ledger.other .row:hover .plus, .ledger.other .row.cur .plus { color: var(--warn); } /* not now, or not today: as the list's */
+.ledger.other .row .plus:hover { background: var(--warn); color: var(--bg); }
+.a .x:hover { background: var(--err); color: var(--bg); }
+.a.days { grid-template-columns: 32px 32px; }
+.a.days .tb { color: var(--ink); }
+.row:hover .x, .row.cur .x, .row.failed .x { visibility: visible; }
+.ledger.still .a .tb { pointer-events: none; } /* just re-drawn under a resting pointer: armed again once it moves */
+.ledger.still .row:hover .x { visibility: hidden; }
+.mk { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: none; margin-left: 2px; }
+.mk.queued { border: 1.5px solid var(--faint); }
+.mk.running { background: var(--acc); animation: pulse 1s ease-in-out infinite; }
+.mk.failed { background: var(--err); }
+@keyframes pulse { 50% { opacity: .25; } }
+/* where the next entry lands when a time is set: the composer's orange, drawn between two rows. No tag: it would cover a time */
+.ins { position: absolute; left: 0; right: 0; height: 2px; margin-top: -1px; background: var(--warn); pointer-events: none; }
+.ins.top { margin-top: 0; }
+.empty { height: var(--row); line-height: var(--row); color: var(--mut); padding: 0 58px; overflow: hidden; }
+
+/* ---- phone line: fixed slots; what the phone says changes inside them, the controls do not move ---- */
+.phone { grid-column: 1 / -1; border-top: 1px solid var(--line); display: grid; align-items: center; column-gap: 10px; font-size: 12px; color: var(--mut); white-space: nowrap;
+  grid-template-columns: 52px 50px clamp(260px, 34vw, 520px) 150px minmax(0, 1fr) auto; padding: 0 8px 0 var(--edge); }
+.phone > * { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.phone .who { text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+.phone .txt { overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+.phone .step, .phone .more { flex: none; color: var(--mut); }
+.phone .next { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* what Undo reaches for when the line speaks of something else: gives way first */
+.phone .now.run .txt { color: var(--ink); }
+.phone .ok { color: var(--ok); flex: none; }
+.phone .err, .phone .fail .txt { color: var(--err); }
+.phone .rt { justify-content: flex-end; gap: 10px; }
+.phone .sync { display: flex; }
+.phone #syncmore { padding: 0 4px; color: var(--mut); }
+/* what Sync can mean: three readings, each with what it reads and what it costs */
+#syncmenu { inset: auto 32px 44px auto; margin: 0; width: 310px; padding: 4px; border: 1px solid var(--line2); border-radius: 8px; background: var(--field); color: var(--ink); box-shadow: 0 8px 28px rgb(0 0 0 / .14); }
+#syncmenu button { display: grid; gap: 2px; width: 100%; padding: 7px 10px; border-radius: 5px; text-align: left; }
+#syncmenu button:hover { background: var(--hover); }
+#syncmenu button[disabled] { cursor: default; opacity: .55; background: none; }
+#syncmenu b { font-weight: 600; }
+#syncmenu span { font-size: 12px; line-height: 1.3; color: var(--mut); }
+.phone.still-act .act .tb, .phone.still-queue .queue .tb, .phone.still-fail .fail .tb { pointer-events: none; } /* it now acts on something else: armed once the pointer moves */
+
+@media (max-width: 1280px) {
+  .app { grid-template-columns: minmax(0, 1fr) 590px; column-gap: 20px; padding: 12px 12px 0; } /* the day keeps its names; the list has room to spare */
+  .composer { grid-template-columns: minmax(0, 1fr) 62px 86px 100px 118px; }
+  .phone { grid-template-columns: 52px 50px 250px 150px minmax(0, 1fr) auto; }
+}

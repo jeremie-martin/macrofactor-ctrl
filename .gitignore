@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+local/
+exports/
+*.xlsx
+*.csv
+*.db
+*.png
